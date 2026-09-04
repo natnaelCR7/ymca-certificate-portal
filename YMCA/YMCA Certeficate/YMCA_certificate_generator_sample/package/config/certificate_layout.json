@@ -1,0 +1,29 @@
+{
+  "participant_name": {
+    "x": 168,
+    "y": 322,
+    "width": 506,
+    "height": 44,
+    "alignment": "center",
+    "font": "bold",
+    "max_size": 27,
+    "min_size": 17,
+    "color": [10, 23, 41]
+  },
+  "course": {
+    "x": 240,
+    "y": 157,
+    "width": 362,
+    "height": 34,
+    "alignment": "center",
+    "font": "bold",
+    "max_size": 17,
+    "min_size": 11,
+    "color": [10, 23, 41]
+  },
+  "qr": {
+    "x": 736,
+    "y": 206,
+    "size": 56
+  }
+}

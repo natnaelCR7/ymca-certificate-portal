@@ -1,0 +1,1527 @@
+1. Project goal
+
+Build a complete certificate platform for the YMCA Ethiopia Summer Program 2026.
+
+The system has three connected responsibilities:
+
+Certificate generation
+Read the certified participant CSV files.
+Generate an individual certificate for each certified course completion.
+Use the supplied Certified.pdf as the certificate design/template.
+Insert the participant's name.
+Insert the completed course/field.
+Generate a unique certificate ID.
+Generate a unique QR code.
+Produce the final PDF.
+Participant certificate portal
+Participants register and log in.
+The system securely identifies/matches them to their own certified participant record.
+Their certificates appear in their dashboard.
+They can view/download only certificates belonging to them.
+A participant must never be able to access another participant's certificate.
+Public certificate verification
+Every certificate has its own QR code.
+Scanning the QR opens a public verification page.
+The system checks the certificate ID against the database.
+It displays whether the certificate is valid, revoked, or not found.
+Verification must not require the certificate owner to log in.
+2. Existing assets
+
+The project already has:
+
+Certified.pdf
+
+This is the official YMCA Ethiopia certificate template.
+
+There is also:
+
+certified participants.zip
+
+containing the CSV files of certified participants.
+
+The current dataset contains certificates across these fields:
+
+Digital Marketing
+French
+Personal Leadership
+Project Management
+Spanish
+Chinese
+English
+IT & AI
+
+There are approximately 446 certificate records and approximately 353 unique participants, because some participants completed multiple courses.
+
+There are also duplicate name + course records which must be detected during import.
+
+3. IMPORTANT: preserve the certificate design
+
+The original Certified.pdf is the source template.
+
+Do NOT redesign the certificate.
+
+Do NOT rasterize it into an image.
+
+Do NOT recreate the entire certificate using HTML or a new design.
+
+The correct process is:
+
+Certified.pdf
+      +
+dynamic text
+      +
+QR code
+      ↓
+final certificate PDF
+
+The original artwork should remain untouched.
+
+Dynamic elements are placed as an overlay on top of the original PDF.
+
+4. Existing generator prototype
+
+There is already a working prototype demonstrating that participant names and QR codes can be inserted into the certificate.
+
+Use that implementation as the starting point.
+
+However, do not simply copy it into the platform without improving it.
+
+The generator needs to become a proper reusable certificate-generation service.
+
+It must support:
+
+CSV/import data
+       ↓
+certificate record
+       ↓
+certificate ID
+       ↓
+QR code
+       ↓
+PDF overlay
+       ↓
+final certificate
+5. CRITICAL BUG TO FIX: dynamic field positioning
+
+There is currently a visual issue with generated certificates.
+
+For example, the course/field name:
+
+Digital Marketing
+
+can be dragged or shifted out of its intended position when the certificate is generated.
+
+The generated example demonstrates that the course text can overlap the horizontal decorative line and does not always remain correctly aligned inside its designated area.
+
+Do not solve this by simply moving the Y coordinate once.
+
+The implementation must introduce a proper dynamic text layout system.
+
+6. Dynamic text bounding boxes
+
+Every dynamic certificate field must have a defined bounding box.
+
+For example:
+
+Participant name:
+x
+y
+width
+height
+alignment
+maximum font size
+minimum font size
+font
+
+Course:
+x
+y
+width
+height
+alignment
+maximum font size
+minimum font size
+font
+
+Conceptually:
+
+┌─────────────────────────────────────┐
+│                                     │
+│       PARTICIPANT NAME AREA         │
+│                                     │
+└─────────────────────────────────────┘
+
+
+┌─────────────────────────────────────┐
+│                                     │
+│          COURSE NAME AREA           │
+│                                     │
+└─────────────────────────────────────┘
+
+The text must be constrained to its respective area.
+
+7. Course-name placement
+
+The course name is particularly important.
+
+The template has:
+
+PROGRAMME / COURSE COMPLETED:
+
+followed by the designated area where the actual course should appear.
+
+The generated course must remain inside that area.
+
+For example:
+
+PROGRAMME / COURSE COMPLETED:
+
+        Digital Marketing
+
+It must not become:
+
+PROGRAMME / COURSE COMPLETED:
+
+        Digital Marketing
+-----------------------------   ← overlapping decorative line
+
+or shift vertically/horizontally depending on the course name.
+
+8. Dynamic font fitting
+
+Implement automatic font fitting.
+
+For example:
+
+font_size = 30
+
+while text_width > max_width:
+    font_size -= 1
+
+But use proper PDF/font measurement rather than guessing based on character count.
+
+The algorithm should calculate the actual rendered width using the selected font.
+
+Example:
+
+Digital Marketing
+
+may fit at:
+
+30px
+
+while:
+
+Personal Leadership and Development
+
+may require:
+
+26px
+
+The text should remain centered.
+
+9. Horizontal alignment
+
+Dynamic fields should use explicit alignment rules.
+
+Participant name:
+
+CENTER
+
+Course:
+
+CENTER
+
+Do not position text by assuming:
+
+x = 400
+
+and then drawing from that point.
+
+Instead calculate:
+
+text_width
+available_width
+center_x
+
+and derive the actual starting X position.
+
+Conceptually:
+
+x = box_x + (box_width - text_width) / 2
+
+This prevents different-length names from appearing visually off-center.
+
+10. Vertical alignment
+
+Do not assume that the PDF's text origin is visually equivalent to the center of the text.
+
+Font ascent/descent must be taken into account.
+
+The renderer should calculate the text's bounding box and place it vertically inside the designated field area.
+
+This is particularly important for:
+
+participant names
+course names
+
+because different fonts and font sizes have different ascent/descent metrics.
+
+11. Font handling
+
+Use a known embedded font.
+
+Do not depend on whatever font happens to exist on the machine running the generator.
+
+Bundle the font with the application.
+
+For example:
+
+fonts/
+    DejaVuSans.ttf
+    DejaVuSans-Bold.ttf
+
+or another approved font that visually matches the template.
+
+The same font must be used consistently in development and production.
+
+12. Certificate layout configuration
+
+Do not bury coordinates throughout the code.
+
+Create a certificate layout configuration.
+
+For example:
+
+certificate_template:
+    participant_name:
+        x
+        y
+        width
+        height
+        alignment
+        font
+        max_size
+        min_size
+
+    course:
+        x
+        y
+        width
+        height
+        alignment
+        font
+        max_size
+        min_size
+
+    qr:
+        x
+        y
+        size
+
+This allows the certificate layout to be adjusted without rewriting the generation logic.
+
+13. QR code placement
+
+Every certificate needs a unique QR code.
+
+The QR must be placed in the designated blank area of the template without covering:
+
+certificate text
+signatures
+logos
+date
+decorative elements
+
+The QR should have sufficient white quiet-zone around it.
+
+It must remain reliably scannable when the PDF is printed.
+
+14. QR content
+
+Do not put participant information directly inside the QR.
+
+Do NOT encode:
+
+name
+email
+phone
+password
+participant details
+
+The QR should contain a verification URL.
+
+For example:
+
+https://DOMAIN/verify/<certificate-id>
+
+The certificate ID should be unpredictable.
+
+Use a cryptographically random UUID or equivalent.
+
+15. Certificate ID
+
+Every certificate gets its own ID.
+
+Important:
+
+The ID belongs to the certificate, not the participant.
+
+Therefore:
+
+John Doe
+ ├── Digital Marketing → CERTIFICATE A
+ ├── French            → CERTIFICATE B
+ └── IT & AI           → CERTIFICATE C
+
+Each certificate has a different ID and QR code.
+
+Never use:
+
+1
+2
+3
+4
+
+as publicly exposed certificate identifiers.
+
+16. Database architecture
+
+Separate users, participants, and certificates.
+
+Conceptually:
+
+USER
+ |
+ | 1:1
+ ↓
+PARTICIPANT
+ |
+ | 1:N
+ ↓
+CERTIFICATE
+
+Certificate:
+
+id
+certificate_id
+participant_id
+participant_name
+course
+programme
+programme_duration
+issue_date
+status
+pdf_path
+created_at
+updated_at
+
+User:
+
+id
+email
+password_hash
+status
+email_verified
+created_at
+updated_at
+
+Participant:
+
+id
+user_id
+source_participant_id
+name
+other verified fields
+created_at
+updated_at
+
+Adapt this to the existing application's database architecture.
+
+17. Do not assume one participant = one certificate
+
+This is mandatory.
+
+A participant can have multiple certificates.
+
+The dashboard therefore needs:
+
+User
+ ↓
+Participant
+ ↓
+Multiple certificates
+
+Example:
+
+My Certificates
+
+Digital Marketing
+[View] [Download]
+
+French
+[View] [Download]
+
+Project Management
+[View] [Download]
+18. Registration
+
+Participant registration should look approximately like:
+
+Create Account
+
+Full Name
+Email
+Password
+Confirm Password
+
+[Create Account]
+
+But registration must not simply search for a certificate based on the entered name and attach it.
+
+This would be insecure.
+
+Bad:
+
+User enters:
+John Doe
+
+System:
+find certificate where name = "John Doe"
+attach it
+
+A malicious user could impersonate another participant.
+
+19. Certificate ownership matching
+
+This is one of the most important architectural decisions.
+
+First inspect the actual CSV data and determine whether there is a reliable participant identifier such as:
+
+email
+participant ID
+registration ID
+other unique verified identifier
+
+Use the strongest available identity information.
+
+If email exists
+
+Prefer:
+
+CSV participant email
+        ↓
+verified account email
+        ↓
+participant
+        ↓
+certificate
+If a unique participant ID exists
+
+Prefer a controlled participant-ID claim process.
+
+If only names exist
+
+Do not pretend name matching is secure.
+
+Implement a controlled claim/verification process, such as an administrator-issued claim code or another verification mechanism available to YMCA.
+
+The implementation must inspect the actual data first and recommend the safest practical approach.
+
+20. Certificate claiming
+
+Once a certificate is assigned to a participant:
+
+certificate.participant_id
+
+must be authoritative.
+
+Another account cannot claim it.
+
+Example:
+
+User A
+ ↓
+claims Certificate ABC
+ ↓
+Certificate ABC → User A
+
+Then:
+
+User B
+ ↓
+tries to claim ABC
+ ↓
+DENIED
+
+This must be enforced by the backend.
+
+21. Never trust frontend ownership information
+
+The frontend must never be able to say:
+
+{
+  "user_id": "123",
+  "certificate_id": "ABC"
+}
+
+and have the backend trust that relationship.
+
+The backend determines:
+
+authenticated user
+        ↓
+database
+        ↓
+certificate ownership
+
+Frontend values are untrusted input.
+
+22. Participant dashboard
+
+After successful authentication:
+
+Dashboard
+
+Welcome, [Name]
+
+Your Certificates
+
+┌──────────────────────────────────────┐
+│ Digital Marketing                    │
+│ YMCA Ethiopia Summer Program 2026    │
+│ Certificate ID: XXXXXXXX             │
+│                                      │
+│ [View]       [Download]              │
+└──────────────────────────────────────┘
+
+Only certificates belonging to the authenticated participant may appear.
+
+23. Certificate download
+
+Use an authenticated endpoint such as:
+
+GET /api/certificates/{certificate_id}/download
+
+Before returning the file:
+
+authenticated?
+      ↓
+certificate exists?
+      ↓
+belongs to authenticated participant?
+      ↓
+YES → download
+NO  → deny
+
+Do not expose:
+
+/certificates/1.pdf
+/certificates/2.pdf
+
+as publicly accessible files.
+
+24. Private certificate storage
+
+Store generated PDFs privately.
+
+For example:
+
+private_storage/
+    certificates/
+        <certificate-id>.pdf
+
+Do not expose the storage directory directly.
+
+The backend retrieves the file only after authorization.
+
+25. Public verification
+
+Public users do not need an account to verify a certificate.
+
+QR:
+
+https://DOMAIN/verify/<certificate-id>
+
+opens:
+
+Certificate Verification
+
+✓ Certificate Verified
+
+Participant:
+John Doe
+
+Course:
+Digital Marketing
+
+Programme:
+YMCA Ethiopia Summer Program 2026
+
+Programme Duration:
+June – August 2026
+
+Certificate ID:
+XXXXXXXX
+
+Status:
+VALID
+
+Only expose information YMCA has decided is appropriate for public verification.
+
+Never expose:
+
+email
+phone
+account information
+password
+private participant metadata
+internal database IDs
+26. Verification states
+
+The verifier must distinguish:
+
+Valid
+✓ Certificate Verified
+Status: VALID
+Revoked
+Certificate Revoked
+Status: REVOKED
+Unknown
+Certificate Not Found
+
+Do not make every certificate ID return "valid."
+
+27. Revocation
+
+Certificates need a status.
+
+Initially:
+
+VALID
+
+Later:
+
+REVOKED
+
+If an administrator revokes a certificate, the QR verification must immediately reflect the new status.
+
+The PDF does not need to be physically deleted for the certificate to become invalid.
+
+The database is the authority.
+
+28. Certificate database = source of truth
+
+The generated PDF is the certificate artifact.
+
+The database is the authoritative record.
+
+Therefore:
+
+PDF
+ ≠
+source of truth
+
+Instead:
+
+Database
+   ↓
+Certificate status
+Certificate ID
+Participant
+Course
+Issue information
+
+The PDF is generated from that information.
+
+29. Import system
+
+Build an importer for:
+
+certified participants/*.csv
+
+The importer must:
+
+Read CSV.
+Validate structure.
+Normalize data.
+Detect duplicates.
+Create/update participant records.
+Create certificate records.
+Generate certificate IDs.
+Generate QR codes.
+Generate PDFs.
+Store PDFs.
+Report results.
+30. Import preview
+
+Before importing, show something like:
+
+Certificate Import
+
+Files: 8
+
+Records found: 446
+
+Valid: 442
+Duplicates: 4
+Invalid: 0
+
+[Review]
+[Import]
+
+Do not silently process everything.
+
+31. Idempotent imports
+
+Uploading the same CSV twice must not create duplicate certificates.
+
+The system needs an appropriate unique key based on the actual source data.
+
+For example:
+
+source participant ID + course
+
+if a reliable source participant ID exists.
+
+Otherwise use the safest deterministic combination available.
+
+The importer must be idempotent.
+
+32. Duplicate handling
+
+Existing duplicate name + course records should not automatically result in duplicate certificates.
+
+Create:
+
+duplicates_report.csv
+
+or an equivalent admin report.
+
+Example:
+
+Duplicate Records
+
+Participant            Course
+---------------------------------
+John Doe                French
+Jane Doe                English
+
+The administrator can resolve these before final issuance.
+
+33. Certificate generation should support batch processing
+
+Support:
+
+Generate one
+Generate selected
+Generate course
+Generate entire dataset
+
+Do not require an HTTP request to remain open while generating hundreds of PDFs.
+
+For a full batch, use a background job/queue if the project's architecture supports it.
+
+34. Generation workflow
+
+The final generation pipeline should be:
+
+CSV
+ ↓
+Validation
+ ↓
+Participant normalization
+ ↓
+Duplicate detection
+ ↓
+Certificate DB record
+ ↓
+Generate unique certificate ID
+ ↓
+Generate verification URL
+ ↓
+Generate QR
+ ↓
+Load Certified.pdf
+ ↓
+Create PDF overlay
+ ↓
+Place participant name
+ ↓
+Place course
+ ↓
+Place QR
+ ↓
+Merge PDFs
+ ↓
+Validate generated PDF
+ ↓
+Store PDF
+ ↓
+Registry updated
+35. Automated PDF validation
+
+Do not assume that because the PDF was generated, it is correct.
+
+After generation, validate:
+
+Name
+
+Is the expected participant name present?
+
+Course
+
+Is the expected course present?
+
+QR
+
+Can the QR actually be decoded?
+
+Certificate ID
+
+Does the QR's certificate ID match the database record?
+
+PDF
+
+Does the file open successfully?
+
+Layout
+
+Does the dynamic text stay inside its configured bounding box?
+
+This last check is specifically required to prevent the current positioning problem from returning.
+
+36. Visual regression testing
+
+Create a certificate rendering test.
+
+For example:
+
+test_certificates/
+    short_name.png
+    long_name.png
+    short_course.png
+    long_course.png
+
+Generate PDFs and render them to images during testing.
+
+Compare against the expected layout or inspect their bounding boxes.
+
+At minimum test:
+
+Ali
+Abdurezak Muhadin
+Abdulrahman Mohammed ...
+Digital Marketing
+Personal Leadership
+Project Management
+
+The goal is to make sure dynamic fields never move into surrounding content.
+
+37. Layout safety checks
+
+The generator should know the allowed regions.
+
+For example:
+
+Participant Name Box
+┌───────────────────────────────┐
+│                               │
+│       NAME MUST STAY HERE     │
+│                               │
+└───────────────────────────────┘
+
+and:
+
+Course Box
+┌───────────────────────────────┐
+│                               │
+│       COURSE MUST STAY HERE   │
+│                               │
+└───────────────────────────────┘
+
+If the renderer calculates that text doesn't fit even at the minimum font size:
+
+DO NOT GENERATE SILENTLY
+
+Instead:
+
+Generation warning:
+Course text does not fit configured certificate field.
+
+This prevents malformed certificates.
+
+38. Course names must come from data
+
+Do not hard-code:
+
+Digital Marketing
+
+into the PDF generator.
+
+The course comes from the CSV record.
+
+The same generator must work with:
+
+Digital Marketing
+French
+Personal Leadership
+Project Management
+Spanish
+Chinese
+English
+IT & AI
+
+and future courses.
+
+39. Certificate template configuration
+
+Keep template configuration separate.
+
+For example:
+
+templates/
+    Certified.pdf
+
+config/
+    certificate_layout.json
+
+The configuration contains:
+
+name area
+course area
+QR area
+font
+font sizes
+margins
+
+This means if YMCA asks:
+
+Move the QR 10 pixels to the left.
+
+we change configuration instead of rewriting the generator.
+
+40. Suggested API
+
+Adapt these routes to the project's existing API conventions.
+
+Authentication
+POST /api/auth/register
+POST /api/auth/login
+POST /api/auth/logout
+POST /api/auth/forgot-password
+POST /api/auth/reset-password
+GET  /api/me
+Participant certificates
+GET /api/certificates
+GET /api/certificates/{certificate_id}
+GET /api/certificates/{certificate_id}/download
+Public verification
+GET /api/verify/{certificate_id}
+
+Frontend:
+
+/verify/{certificate_id}
+Admin
+POST /api/admin/certificates/import
+GET  /api/admin/certificates
+POST /api/admin/certificates/{id}/revoke
+POST /api/admin/certificates/{id}/reissue
+41. Security requirements
+
+This platform contains personal data and certificate ownership, so security is part of the core implementation.
+
+At minimum protect against:
+
+Broken access control
+IDOR / BOLA
+Mass assignment
+Privilege escalation
+Account enumeration
+Certificate enumeration
+Brute force
+SQL injection
+XSS
+CSRF where applicable
+Path traversal
+Unauthorized file access
+Insecure direct PDF access
+42. Mandatory IDOR testing
+
+This must be explicitly tested.
+
+Create:
+
+User A → Certificate A
+User B → Certificate B
+
+Then test:
+
+User A → GET Certificate A
+
+Expected:
+
+200
+
+Then:
+
+User A → GET Certificate B
+
+Expected:
+
+403 or appropriate 404
+
+Also test:
+
+User A → download Certificate B
+User A → modify certificate ID
+User A → modify participant ID
+User A → modify user ID
+
+All must fail.
+
+43. Admin security
+
+Separate participant and administrator privileges.
+
+For example:
+
+PARTICIPANT
+ADMIN
+
+Participants must never be able to:
+
+import CSV
+generate certificates
+revoke certificates
+change ownership
+modify certificate status
+access admin APIs
+
+Never trust a role supplied by the frontend.
+
+44. Rate limiting
+
+Apply reasonable rate limits to:
+
+login
+registration
+password reset
+certificate claiming
+public verification if necessary
+
+This is especially important for authentication endpoints.
+
+45. Account enumeration
+
+Do not make it easy to discover whether a specific person has an account or certificate.
+
+Avoid responses such as:
+
+"John Doe exists and has 3 certificates."
+
+to unauthenticated users.
+
+46. Audit logging
+
+Log important events:
+
+ACCOUNT_CREATED
+LOGIN
+CERTIFICATE_IMPORTED
+CERTIFICATE_CREATED
+CERTIFICATE_CLAIMED
+CERTIFICATE_DOWNLOADED
+CERTIFICATE_REVOKED
+CERTIFICATE_REISSUED
+
+Never log:
+
+passwords
+access tokens
+reset tokens
+47. Reissue handling
+
+If YMCA needs to correct a certificate, don't casually overwrite the certificate identity.
+
+Maintain a record of:
+
+original certificate
+reissue
+reason
+timestamp
+administrator
+
+The exact implementation can be simple initially but the data model should not make future reissue tracking impossible.
+
+48. Participant dashboard UX
+
+Keep it simple.
+
+Landing page
+YMCA Ethiopia
+Certificate Portal
+
+[Login]
+[Create Account]
+Dashboard
+Welcome, Participant
+
+Your Certificates
+
+Digital Marketing
+Certificate #XXXX
+[View] [Download]
+
+French
+Certificate #XXXX
+[View] [Download]
+Empty state
+
+If the account has no certificate:
+
+No certificates are currently linked
+to your account.
+
+Do not display other people's certificates.
+
+49. Public verification UX
+
+The QR scanner should lead to a clean page.
+
+Example:
+
+        YMCA ETHIOPIA
+
+     CERTIFICATE VERIFICATION
+
+             ✓
+
+       CERTIFICATE VALID
+
+Participant
+Abdurezak Muhadin
+
+Course
+Digital Marketing
+
+Programme
+YMCA Ethiopia Summer Program 2026
+
+Duration
+June – August 2026
+
+Certificate ID
+xxxxxxxx-xxxx-xxxx
+
+Status
+VALID
+
+For invalid:
+
+✕
+
+CERTIFICATE NOT FOUND
+
+For revoked:
+
+!
+
+CERTIFICATE REVOKED
+50. Do not expose PDF through verification
+
+The public verification page should verify authenticity.
+
+It should not automatically expose the private downloadable PDF.
+
+The participant's download is an authenticated function.
+
+This gives us:
+
+QR
+ ↓
+Public verification
+
+while:
+
+Dashboard
+ ↓
+Authenticated download
+51. Development phases
+Phase 1 — Repository and data inspection
+
+Before modifying code:
+
+inspect existing project
+identify backend
+identify frontend
+identify database
+identify authentication
+identify storage
+inspect all CSVs
+inspect current certificate generator
+inspect Certified.pdf
+
+Produce an implementation assessment first.
+
+Do not rewrite existing architecture unnecessarily.
+
+Phase 2 — Certificate engine
+
+Integrate:
+
+Certified.pdf
++
+participant data
+
+Implement:
+
+participant name
+course
+dynamic font sizing
+bounding boxes
+centered alignment
+QR
+certificate ID
+PDF output
+
+Fix the existing field-positioning problem completely.
+
+Phase 3 — Certificate database
+
+Implement:
+
+Participant
+Certificate
+CertificateStatus
+
+and relationships.
+
+Phase 4 — Import pipeline
+
+Implement:
+
+CSV
+ ↓
+validate
+ ↓
+duplicate detection
+ ↓
+database
+ ↓
+generation
+
+Make it idempotent.
+
+Phase 5 — QR verification
+
+Implement:
+
+/verify/{certificate_id}
+
+and public verification UI.
+
+Phase 6 — Authentication
+
+Implement or integrate with existing:
+
+register
+login
+logout
+password reset
+
+Do not create a second authentication system if the project already has one.
+
+Phase 7 — Participant matching
+
+Based on the actual CSV fields, implement the strongest safe matching method.
+
+Do not use name-only matching as proof of ownership.
+
+Phase 8 — Participant dashboard
+
+Implement:
+
+My Certificates
+View
+Download
+
+with strict server-side authorization.
+
+Phase 9 — Admin
+
+Implement:
+
+CSV import
+certificate list
+certificate status
+revoke
+reissue
+Phase 10 — Security testing
+
+Perform API and frontend testing.
+
+Especially:
+
+IDOR/BOLA
+mass assignment
+privilege escalation
+certificate enumeration
+file access
+authentication bypass
+authorization bypass
+Phase 11 — Full certificate generation
+
+Do NOT generate all 446 final certificates until the generator passes visual and automated tests.
+
+First:
+
+3 certificates
+ ↓
+visual review
+ ↓
+20 certificates
+ ↓
+automated validation
+ ↓
+446 certificates
+52. Acceptance criteria
+
+The project is not considered complete until all of these are true.
+
+Certificate generation
+ Original template remains intact.
+ Participant names are inserted automatically.
+ Participant names remain selectable PDF text.
+ Course names are inserted automatically.
+ Course names never overlap surrounding template elements.
+ Long participant names automatically fit.
+ Long course names automatically fit.
+ Text remains centered.
+ QR codes are generated.
+ QR codes scan correctly.
+ Every certificate has a unique certificate ID.
+ QR ID matches database ID.
+ Generated PDFs open correctly.
+Participant portal
+ User can register.
+ User can log in.
+ User can log out.
+ User can see their certificates.
+ User can download their certificates.
+ Multiple certificates per participant work.
+ User cannot see another participant's certificates.
+ User cannot download another participant's PDF.
+ User cannot claim someone else's certificate.
+Verification
+ QR opens public verification page.
+ Valid certificates show VALID.
+ Revoked certificates show REVOKED.
+ Unknown IDs show NOT FOUND.
+ Verification does not require login.
+ Verification does not expose private participant information.
+Import
+ All CSV files can be imported.
+ Duplicate records are detected.
+ Re-importing does not create duplicate certificates.
+ Invalid records are reported.
+ Import results are auditable.
+Security
+ IDOR tests pass.
+ Authorization is enforced server-side.
+ Participant cannot elevate to admin.
+ Certificate IDs are not predictable sequential IDs.
+ PDFs are not publicly browsable.
+ Authentication endpoints are rate limited.
+ Sensitive authentication data is not logged.
+53. Very important implementation instruction for Codex
+
+Do not blindly implement the entire system in one pass.
+
+Work incrementally.
+
+First inspect the repository and data.
+
+Then tell me:
+
+1. Existing architecture
+2. CSV structure
+3. Current certificate generator
+4. Current authentication
+5. Current database
+6. Current storage
+7. Recommended participant matching method
+8. Exact implementation plan
+9. Files that will be changed
+
+Then implement Phase 1/2.
+
+After the certificate renderer is correct, proceed to the platform components.
+
+54. Final architecture
+
+The final product should effectively be:
+
+                         YMCA CERTIFICATE PLATFORM
+                                  │
+             ┌────────────────────┼────────────────────┐
+             │                    │                    │
+             ▼                    ▼                    ▼
+       CERTIFICATE             PARTICIPANT          PUBLIC
+        ISSUANCE                 PORTAL           VERIFICATION
+             │                    │                    │
+             ▼                    ▼                    ▼
+          CSV DATA             Register             Scan QR
+             │                    │                    │
+             ▼                    ▼                    ▼
+       Import / Validate         Login          /verify/:id
+             │                    │                    │
+             ▼                    ▼                    ▼
+       Participant DB       Identity Match        DB Lookup
+             │                    │                    │
+             ▼                    ▼                    ▼
+       Certificate DB       Own Certificates     VALID/REVOKED
+             │                    │
+             ▼                    ▼
+       PDF Generator          Download
+             │
+             ├── Participant Name
+             ├── Course
+             ├── Certificate ID
+             └── QR Code
+                    │
+                    ▼
+             Final Certificate
+                    │
+                    ▼
+               QR Scanner
+                    │
+                    └──────────────► Public Verification
+The most important design principle
+
+There are three different concepts and Codex should keep them separate:
+
+IDENTITY
+Who is this person?
+
+        ↓
+
+OWNERSHIP
+Which certificate belongs to this person?
+
+        ↓
+
+VERIFICATION
+Is this certificate genuine?
+
+A participant logging in proves their account identity.
+
+The database determines which certificates they own.
+
+The QR system determines whether a certificate is genuine.
+
+Those must not be conflated.
+
+And the certificate generator itself should be treated as an issuance service inside this architecture, not as the entire project.
+
+The current visual bug with the course/field placement should also be treated as a real generation-engine bug, not a cosmetic issue: the final renderer needs bounded text layout, font measurement, automatic fitting, alignment, and post-generation validation so that all 446 certificates can be generated reliably without manually checking every PDF.

@@ -1,0 +1,4 @@
+certificate_id,participant_name,course,verification_url,status
+7a0c6ff8-ab9a-47bf-9d2f-d1d9b4d39b91,Abdurezak Muhadin,Digital Marketing,https://verify.example.org/c/7a0c6ff8-ab9a-47bf-9d2f-d1d9b4d39b91,valid
+081d7b3a-7ac1-4635-9d18-7a993340827e,Abenezer Disasa,Digital Marketing,https://verify.example.org/c/081d7b3a-7ac1-4635-9d18-7a993340827e,valid
+aa47f4b7-d45f-4e92-b4bb-2ceeb04cea28,Abenezer Shimelis,Digital Marketing,https://verify.example.org/c/aa47f4b7-d45f-4e92-b4bb-2ceeb04cea28,valid
