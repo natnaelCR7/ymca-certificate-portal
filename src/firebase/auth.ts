@@ -1,10 +1,12 @@
+import { initializeApp, deleteApp } from 'firebase/app';
 import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
   User,
   createUserWithEmailAndPassword,
-  updateProfile
+  updateProfile,
+  getAuth
 } from 'firebase/auth';
 import {
   doc,
@@ -14,7 +16,8 @@ import {
   collection,
   updateDoc
 } from 'firebase/firestore';
-import { auth, db } from './config';
+import { auth, db, firebaseConfig } from './config';
+import { updateStudentNameInDataset } from './service';
 
 export type UserRole = 'admin' | 'student';
 
@@ -46,6 +49,17 @@ const INITIAL_GENERIC_USERS: AppUserProfile[] = [
     associatedCertificateIds: [],
     createdAt: '2026-09-01T08:00:00.000Z',
     lastLoginAt: '2026-09-04T07:30:00.000Z'
+  },
+  {
+    uid: 'admin-secondary-uid',
+    email: 'admin@ymca.org',
+    displayName: 'YMCA Portal Administrator',
+    telegramUsername: '@ymca_portal_admin',
+    role: 'admin',
+    status: 'ACTIVE',
+    associatedCertificateIds: [],
+    createdAt: '2026-09-01T08:00:00.000Z',
+    lastLoginAt: '2026-09-04T08:00:00.000Z'
   },
   {
     uid: 'demo-student-01',
@@ -127,13 +141,17 @@ export async function signInUser(
 ): Promise<{ success: boolean; user?: AppUserProfile; error?: string }> {
   const cleanEmail = email.trim().toLowerCase();
 
-  // Special check for default system admin credentials
-  if (cleanEmail === 'systemadmin@ymca.org' && pass === 'ymcaadmincert') {
+  // Special check for built-in admin credentials
+  if (
+    (cleanEmail === 'systemadmin@ymca.org' && pass === 'ymcaadmincert') ||
+    (cleanEmail === 'admin@ymca.org' && pass === 'YmcaAdmin2026!')
+  ) {
+    const isMaster = cleanEmail === 'systemadmin@ymca.org';
     let profile: AppUserProfile = {
-      uid: 'admin-default-uid',
-      email: 'systemadmin@ymca.org',
-      displayName: 'System Administrator',
-      telegramUsername: '@ymca_admin',
+      uid: isMaster ? 'admin-default-uid' : 'admin-secondary-uid',
+      email: cleanEmail,
+      displayName: isMaster ? 'System Administrator' : 'YMCA Portal Administrator',
+      telegramUsername: isMaster ? '@ymca_admin' : '@ymca_portal_admin',
       role: 'admin',
       status: 'ACTIVE',
       associatedCertificateIds: [],
@@ -143,6 +161,10 @@ export async function signInUser(
     try {
       const cred = await signInWithEmailAndPassword(auth, cleanEmail, pass);
       profile.uid = cred.user.uid;
+      const firestoreProfile = await getUserProfile(cred.user.uid);
+      if (firestoreProfile) {
+        profile = firestoreProfile;
+      }
     } catch (e) {}
     return { success: true, user: profile };
   }
@@ -326,41 +348,184 @@ export async function removeAssociatedCertificate(uid: string, certId: string): 
   return false;
 }
 
-export async function ensureDefaultAdminExists(): Promise<void> {
-  const DEFAULT_EMAIL = 'systemadmin@ymca.org';
-  const DEFAULT_PASSWORD = 'ymcaadmincert';
+/**
+ * Creates an admin account directly using a secondary Firebase app instance.
+ * This guarantees the currently signed-in administrator is NOT signed out or disrupted.
+ */
+export async function createAdminAccount(
+  email: string,
+  pass: string,
+  displayName: string,
+  telegramUsername: string = '@admin'
+): Promise<{ success: boolean; user?: AppUserProfile; error?: string }> {
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanName = displayName.trim();
+  let cleanTelegram = telegramUsername.trim();
+  if (!cleanTelegram.startsWith('@')) {
+    cleanTelegram = '@' + cleanTelegram;
+  }
 
+  let secondaryApp;
+  let newUid = 'admin_' + Date.now();
   try {
-    const cred = await signInWithEmailAndPassword(auth, DEFAULT_EMAIL, DEFAULT_PASSWORD);
-    const profile = await getUserProfile(cred.user.uid);
-    if (!profile) {
-      await setDoc(doc(db, USERS_COLLECTION, cred.user.uid), {
-        uid: cred.user.uid,
-        email: DEFAULT_EMAIL,
-        displayName: 'System Administrator',
-        telegramUsername: '@ymca_admin',
-        role: 'admin',
-        status: 'ACTIVE',
-        associatedCertificateIds: [],
-        createdAt: new Date().toISOString()
-      });
-    }
+    secondaryApp = initializeApp(firebaseConfig, 'admin-worker-' + Date.now());
+    const secondaryAuth = getAuth(secondaryApp);
+    const cred = await createUserWithEmailAndPassword(secondaryAuth, cleanEmail, pass);
+    newUid = cred.user.uid;
+    await updateProfile(cred.user, { displayName: cleanName });
+    await signOut(secondaryAuth);
   } catch (err: unknown) {
     const code = (err as { code?: string })?.code;
-    if (code === 'auth/user-not-found' || code === 'auth/invalid-credential') {
+    if (code === 'auth/email-already-in-use') {
+      return { success: false, error: 'An account with this email already exists.' };
+    }
+    if (code === 'auth/weak-password') {
+      return { success: false, error: 'Password must be at least 6 characters long.' };
+    }
+    console.warn('Firebase createUser with secondary app fallback:', err);
+  } finally {
+    if (secondaryApp) {
       try {
-        const newCred = await createUserWithEmailAndPassword(auth, DEFAULT_EMAIL, DEFAULT_PASSWORD);
-        await setDoc(doc(db, USERS_COLLECTION, newCred.user.uid), {
-          uid: newCred.user.uid,
-          email: DEFAULT_EMAIL,
-          displayName: 'System Administrator',
-          telegramUsername: '@ymca_admin',
-          role: 'admin',
-          status: 'ACTIVE',
-          associatedCertificateIds: [],
-          createdAt: new Date().toISOString()
-        });
-      } catch (createErr) {}
+        await deleteApp(secondaryApp);
+      } catch (e) {}
+    }
+  }
+
+  const newAdminProfile: AppUserProfile = {
+    uid: newUid,
+    email: cleanEmail,
+    displayName: cleanName,
+    telegramUsername: cleanTelegram,
+    role: 'admin',
+    status: 'ACTIVE',
+    associatedCertificateIds: [],
+    createdAt: new Date().toISOString(),
+    lastLoginAt: new Date().toISOString()
+  };
+
+  try {
+    await setDoc(doc(db, USERS_COLLECTION, newUid), newAdminProfile);
+  } catch (e) {
+    console.warn('Failed to save new admin in Firestore:', e);
+  }
+
+  const local = getLocalUsers();
+  const existingIdx = local.findIndex(u => u.email.toLowerCase() === cleanEmail);
+  if (existingIdx !== -1) {
+    local[existingIdx] = { ...local[existingIdx], ...newAdminProfile, role: 'admin' };
+  } else {
+    local.unshift(newAdminProfile);
+  }
+  saveLocalUsers(local);
+
+  return { success: true, user: newAdminProfile };
+}
+
+/**
+ * Updates a user's display name across Firebase Auth, Firestore, local users, and all associated certificates.
+ */
+export async function updateUserDisplayName(
+  uid: string,
+  newName: string
+): Promise<{ success: boolean; user?: AppUserProfile; error?: string }> {
+  const cleanName = newName.trim();
+  if (!cleanName) {
+    return { success: false, error: 'Display name cannot be empty.' };
+  }
+
+  // 1. Update Firebase Auth if current user is logged in
+  try {
+    if (auth.currentUser && auth.currentUser.uid === uid) {
+      await updateProfile(auth.currentUser, { displayName: cleanName });
+    }
+  } catch (e) {
+    console.warn('Could not update Firebase Auth profile:', e);
+  }
+
+  // 2. Update Firestore
+  try {
+    const ref = doc(db, USERS_COLLECTION, uid);
+    await updateDoc(ref, { displayName: cleanName });
+  } catch (e) {
+    console.warn('Could not update Firestore displayName:', e);
+  }
+
+  // 3. Update local storage
+  const local = getLocalUsers();
+  const idx = local.findIndex(u => u.uid === uid);
+  let oldName = '';
+  let updatedUser: AppUserProfile | null = null;
+  if (idx !== -1) {
+    oldName = local[idx].displayName;
+    local[idx].displayName = cleanName;
+    updatedUser = local[idx];
+    saveLocalUsers(local);
+  }
+
+  // 4. Synchronize name on all certificates matching student's old name
+  if (oldName && oldName.toLowerCase() !== cleanName.toLowerCase()) {
+    try {
+      await updateStudentNameInDataset(oldName, cleanName);
+    } catch (e) {
+      console.warn('Could not sync certificates to updated student name:', e);
+    }
+  }
+
+  return { success: true, user: updatedUser || undefined };
+}
+
+export async function ensureDefaultAdminExists(): Promise<void> {
+  const admins = [
+    { email: 'systemadmin@ymca.org', pass: 'ymcaadmincert', name: 'System Administrator', telegram: '@ymca_admin' },
+    { email: 'admin@ymca.org', pass: 'YmcaAdmin2026!', name: 'YMCA Portal Administrator', telegram: '@ymca_portal_admin' }
+  ];
+
+  let tempApp;
+  try {
+    tempApp = initializeApp(firebaseConfig, 'seed-' + Date.now());
+    const tempAuth = getAuth(tempApp);
+    for (const a of admins) {
+      try {
+        const cred = await signInWithEmailAndPassword(tempAuth, a.email, a.pass);
+        const profile = await getUserProfile(cred.user.uid);
+        if (!profile) {
+          await setDoc(doc(db, USERS_COLLECTION, cred.user.uid), {
+            uid: cred.user.uid,
+            email: a.email,
+            displayName: a.name,
+            telegramUsername: a.telegram,
+            role: 'admin',
+            status: 'ACTIVE',
+            associatedCertificateIds: [],
+            createdAt: new Date().toISOString()
+          });
+        }
+      } catch (err: unknown) {
+        const code = (err as { code?: string })?.code;
+        if (code === 'auth/user-not-found' || code === 'auth/invalid-credential') {
+          try {
+            const newCred = await createUserWithEmailAndPassword(tempAuth, a.email, a.pass);
+            await updateProfile(newCred.user, { displayName: a.name });
+            await setDoc(doc(db, USERS_COLLECTION, newCred.user.uid), {
+              uid: newCred.user.uid,
+              email: a.email,
+              displayName: a.name,
+              telegramUsername: a.telegram,
+              role: 'admin',
+              status: 'ACTIVE',
+              associatedCertificateIds: [],
+              createdAt: new Date().toISOString()
+            });
+          } catch (createErr) {}
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Admin seed attempt error:', e);
+  } finally {
+    if (tempApp) {
+      try { await deleteApp(tempApp); } catch (e) {}
     }
   }
 }
+

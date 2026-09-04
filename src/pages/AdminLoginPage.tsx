@@ -53,11 +53,13 @@ export const AdminLoginPage: React.FC = () => {
           color: '#FFFFFF',
           borderBottom: '3px solid #C41230'
         }}>
-          <img
-            src="/logo.png"
-            alt="YMCA Ethiopia"
-            style={{ height: '38px', width: 'auto', marginBottom: '0.75rem', filter: 'brightness(0) invert(1)' }}
-          />
+          <div style={{ display: 'inline-flex', backgroundColor: '#FFFFFF', borderRadius: '8px', padding: '4px 10px', marginBottom: '0.75rem' }}>
+            <img
+              src="/logo.png"
+              alt="YMCA Ethiopia"
+              style={{ height: '34px', width: 'auto' }}
+            />
+          </div>
           <h1 style={{ fontSize: '1.25rem', fontWeight: 800, margin: '0 0 4px', letterSpacing: '-0.02em' }}>
             Administrator Access
           </h1>

@@ -7,7 +7,8 @@ import {
   ensureDefaultAdminExists,
   signInUser as apiSignInUser,
   registerUser as apiRegisterUser,
-  logOutUser as apiLogOutUser
+  logOutUser as apiLogOutUser,
+  updateUserDisplayName
 } from '../firebase/auth';
 import {
   getGlobalPortalStatus,
@@ -30,6 +31,7 @@ interface AuthContextValue {
   togglePortalStatus: (active: boolean) => Promise<void>;
   toggleProgramStatus: (program: string, active: boolean) => Promise<void>;
   refreshProfile: () => Promise<void>;
+  updateUserName: (newName: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextValue>({
@@ -45,7 +47,8 @@ const AuthContext = createContext<AuthContextValue>({
   logOut: async () => {},
   togglePortalStatus: async () => {},
   toggleProgramStatus: async () => {},
-  refreshProfile: async () => {}
+  refreshProfile: async () => {},
+  updateUserName: async () => ({ success: false })
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -130,6 +133,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateUserName = async (newName: string) => {
+    if (!currentUser) return { success: false, error: 'Not authenticated.' };
+    const res = await updateUserDisplayName(currentUser.uid, newName);
+    if (res.success && res.user) {
+      setCurrentUser(res.user);
+      sessionStorage.setItem('ymca_active_user', JSON.stringify(res.user));
+    }
+    return res;
+  };
+
   const isAdmin = !!currentUser && currentUser.role === 'admin';
   const isStudent = !!currentUser && currentUser.role === 'student';
 
@@ -148,7 +161,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logOut,
         togglePortalStatus,
         toggleProgramStatus,
-        refreshProfile
+        refreshProfile,
+        updateUserName
       }}
     >
       {children}

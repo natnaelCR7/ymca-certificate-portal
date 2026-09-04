@@ -305,7 +305,9 @@ export const HomePage: React.FC = () => {
             color: '#FFFFFF'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
-              <img src="/logo.png" alt="YMCA" style={{ height: '32px', filter: 'brightness(0) invert(1)' }} />
+              <div style={{ display: 'inline-flex', backgroundColor: '#FFFFFF', borderRadius: '8px', padding: '4px 8px' }}>
+                <img src="/logo.png" alt="YMCA" style={{ height: '28px', width: 'auto' }} />
+              </div>
               <div>
                 <div style={{ fontSize: '0.95rem', fontWeight: 700 }}>YMCA Ethiopia Verification Standard</div>
                 <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>Registry Active for Summer 2026 Cohort</div>

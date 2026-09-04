@@ -22,11 +22,13 @@ export const Footer: React.FC = () => {
         {/* Organization Info */}
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-            <img
-              src="/logo.png"
-              alt="YMCA Ethiopia"
-              style={{ height: '40px', width: 'auto', objectFit: 'contain', filter: 'brightness(0) invert(1)' }}
-            />
+            <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', padding: '3px 8px', display: 'flex', alignItems: 'center' }}>
+              <img
+                src="/logo.png"
+                alt="YMCA Ethiopia"
+                style={{ height: '36px', width: 'auto', objectFit: 'contain' }}
+              />
+            </div>
             <div>
               <span style={{ fontSize: '1.15rem', fontWeight: 800, color: '#FFFFFF', letterSpacing: '-0.02em', display: 'block' }}>
                 YMCA <span style={{ color: '#F87171' }}>ETHIOPIA</span>

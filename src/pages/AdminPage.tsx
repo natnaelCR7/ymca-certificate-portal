@@ -14,6 +14,7 @@ import {
   updateRegisteredUserStatus,
   associateCertificateToUser,
   removeAssociatedCertificate,
+  createAdminAccount,
   AppUserProfile,
   UserRole
 } from '../firebase/auth';
@@ -85,6 +86,15 @@ export const AdminPage: React.FC = () => {
   // 5. Batch Sync
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
+
+  // 6. Create Admin Account Modal
+  const [createAdminOpen, setCreateAdminOpen] = useState(false);
+  const [newAdminName, setNewAdminName] = useState('');
+  const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [newAdminPassword, setNewAdminPassword] = useState('');
+  const [newAdminTelegram, setNewAdminTelegram] = useState('');
+  const [creatingAdmin, setCreatingAdmin] = useState(false);
+  const [createAdminError, setCreateAdminError] = useState('');
 
   // Load all data
   const loadAdminData = async () => {
@@ -182,6 +192,35 @@ export const AdminPage: React.FC = () => {
     await loadAdminData();
   };
 
+  const handleCreateAdminAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAdminName.trim() || !newAdminEmail.trim() || !newAdminPassword.trim()) return;
+    setCreatingAdmin(true);
+    setCreateAdminError('');
+    try {
+      const result = await createAdminAccount(
+        newAdminEmail.trim(),
+        newAdminPassword.trim(),
+        newAdminName.trim(),
+        newAdminTelegram.trim() || '@admin'
+      );
+      if (!result.success) {
+        setCreateAdminError(result.error || 'Failed to create admin account.');
+        return;
+      }
+      await loadAdminData();
+      setCreateAdminOpen(false);
+      setNewAdminName('');
+      setNewAdminEmail('');
+      setNewAdminPassword('');
+      setNewAdminTelegram('');
+    } catch (err) {
+      setCreateAdminError('An error occurred. Please try again.');
+    } finally {
+      setCreatingAdmin(false);
+    }
+  };
+
   const handleBatchSync = async () => {
     setSyncing(true);
     setSyncMsg('Writing 441 records to Firestore…');
@@ -244,11 +283,13 @@ export const AdminPage: React.FC = () => {
           gap: '1rem'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-            <img
-              src="/logo.png"
-              alt="YMCA"
-              style={{ height: '36px', filter: 'brightness(0) invert(1)' }}
-            />
+            <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', padding: '3px 8px', display: 'flex', alignItems: 'center' }}>
+              <img
+                src="/logo.png"
+                alt="YMCA"
+                style={{ height: '32px', width: 'auto' }}
+              />
+            </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <span style={{ fontSize: '1.15rem', fontWeight: 800, letterSpacing: '-0.02em' }}>
@@ -955,12 +996,23 @@ export const AdminPage: React.FC = () => {
               padding: '1.5rem'
             }}>
               <div style={{ marginBottom: '1.5rem' }}>
-                <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0F172A', margin: 0 }}>
-                  Type B: Registered Users Management
-                </h2>
-                <p style={{ fontSize: '0.85rem', color: '#64748B', margin: '4px 0 0' }}>
-                  Accounts registered in the portal with their required Telegram usernames and associated certificates.
-                </p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+                <div>
+                  <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                    Type B: Registered Users Management
+                  </h2>
+                  <p style={{ fontSize: '0.85rem', color: '#64748B', margin: '4px 0 0' }}>
+                    Accounts registered in the portal with their required Telegram usernames and associated certificates.
+                  </p>
+                </div>
+                  <button
+                    onClick={() => { setCreateAdminOpen(true); setCreateAdminError(''); }}
+                    className="btn-primary"
+                    style={{ padding: '8px 16px', fontSize: '0.85rem', whiteSpace: 'nowrap' }}
+                  >
+                    <Shield size={15} /> Create Admin Account
+                  </button>
+                </div>
               </div>
 
               {/* User Filters */}
@@ -1423,6 +1475,142 @@ export const AdminPage: React.FC = () => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {/* ── MODAL 5: CREATE ADMIN ACCOUNT ─────────────────────── */}
+      {createAdminOpen && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 100,
+          padding: '1rem'
+        }}>
+          <div style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '14px',
+            width: '100%',
+            maxWidth: '480px',
+            overflow: 'hidden',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
+            border: '1px solid #E2E8F0'
+          }}>
+            <div style={{
+              backgroundColor: '#0F172A',
+              color: '#FFFFFF',
+              padding: '1.25rem 1.5rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              borderBottom: '3px solid #C41230'
+            }}>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: '1.05rem' }}>Create Admin Account</div>
+                <div style={{ fontSize: '0.75rem', color: '#94A3B8', marginTop: '2px' }}>
+                  New account will have Administrator role immediately
+                </div>
+              </div>
+              <button
+                onClick={() => setCreateAdminOpen(false)}
+                style={{ background: 'none', border: 'none', color: '#FFFFFF', fontSize: '1.2rem', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateAdminAccount} style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {createAdminError && (
+                <div style={{
+                  padding: '10px 14px',
+                  backgroundColor: '#FEF2F2',
+                  border: '1px solid #FCA5A5',
+                  color: '#991B1B',
+                  borderRadius: '8px',
+                  fontSize: '0.85rem'
+                }}>
+                  {createAdminError}
+                </div>
+              )}
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                  FULL NAME
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newAdminName}
+                  onChange={(e) => setNewAdminName(e.target.value)}
+                  placeholder="Enter admin full name"
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.9rem', outline: 'none' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                  EMAIL ADDRESS
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={newAdminEmail}
+                  onChange={(e) => setNewAdminEmail(e.target.value)}
+                  placeholder="admin@ymca.org"
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.9rem', outline: 'none' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                  PASSWORD (min. 6 characters)
+                </label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  value={newAdminPassword}
+                  onChange={(e) => setNewAdminPassword(e.target.value)}
+                  placeholder="Set a secure password"
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.9rem', outline: 'none' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                  TELEGRAM USERNAME (optional)
+                </label>
+                <input
+                  type="text"
+                  value={newAdminTelegram}
+                  onChange={(e) => setNewAdminTelegram(e.target.value)}
+                  placeholder="@admin_username"
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.9rem', outline: 'none' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.25rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setCreateAdminOpen(false)}
+                  className="btn-secondary"
+                  style={{ padding: '9px 18px', fontSize: '0.88rem' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingAdmin}
+                  className="btn-primary"
+                  style={{ padding: '9px 22px', fontSize: '0.88rem' }}
+                >
+                  {creatingAdmin ? 'Creating…' : 'Create Admin Account'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
