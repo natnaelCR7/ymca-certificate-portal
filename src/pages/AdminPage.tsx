@@ -7,7 +7,7 @@ import {
   Clock, AlertTriangle, Layers, UserCheck, Send, Info
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { CertificateRecord, AVAILABLE_COURSES } from '../data/certifiedParticipants';
+import { CertificateRecord, AVAILABLE_COURSES, INITIAL_CERTIFICATES } from '../data/certifiedParticipants';
 import {
   getAllRegisteredUsers,
   toggleRegisteredUserRole,
@@ -87,12 +87,13 @@ export const AdminPage: React.FC = () => {
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
 
-  // 6. Create Admin Account Modal
+  // 6. Add User Account Modal (admin or student)
   const [createAdminOpen, setCreateAdminOpen] = useState(false);
   const [newAdminName, setNewAdminName] = useState('');
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [newAdminPassword, setNewAdminPassword] = useState('');
   const [newAdminTelegram, setNewAdminTelegram] = useState('');
+  const [newAdminRole, setNewAdminRole] = useState<UserRole>('student');
   const [creatingAdmin, setCreatingAdmin] = useState(false);
   const [createAdminError, setCreateAdminError] = useState('');
 
@@ -202,10 +203,11 @@ export const AdminPage: React.FC = () => {
         newAdminEmail.trim(),
         newAdminPassword.trim(),
         newAdminName.trim(),
-        newAdminTelegram.trim() || '@admin'
+        newAdminTelegram.trim() || '@admin',
+        newAdminRole
       );
       if (!result.success) {
-        setCreateAdminError(result.error || 'Failed to create admin account.');
+        setCreateAdminError(result.error || 'Failed to create the account.');
         return;
       }
       await loadAdminData();
@@ -214,6 +216,7 @@ export const AdminPage: React.FC = () => {
       setNewAdminEmail('');
       setNewAdminPassword('');
       setNewAdminTelegram('');
+      setNewAdminRole('student');
     } catch (err) {
       setCreateAdminError('An error occurred. Please try again.');
     } finally {
@@ -223,10 +226,12 @@ export const AdminPage: React.FC = () => {
 
   const handleBatchSync = async () => {
     setSyncing(true);
-    setSyncMsg('Writing 441 records to Firestore…');
+    setSyncMsg(`Writing ${INITIAL_CERTIFICATES.length} records to Firestore and removing stale ones…`);
     try {
       const res = await syncBatchToFirestore();
-      setSyncMsg(`Sync complete! ${res.success} certificates synchronized.`);
+      setSyncMsg(
+        `Sync complete! ${res.success} certificates written, ${res.deleted} stale remote docs deleted${res.failed ? `, ${res.failed} failed` : ''}.`
+      );
       await loadAdminData();
     } catch (e) {
       setSyncMsg('Batch sync failed.');
@@ -503,7 +508,7 @@ export const AdminPage: React.FC = () => {
                 <div style={{ backgroundColor: '#FFFFFF', borderRadius: '12px', padding: '1.5rem', border: '1px solid #E2E8F0' }}>
                   <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#64748B' }}>TOTAL CERTIFICATE RECORDS</div>
                   <div style={{ fontSize: '2.2rem', fontWeight: 800, color: '#0F172A', marginTop: '0.25rem' }}>{totalCerts}</div>
-                  <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: '0.25rem' }}>Original 441 dataset records</div>
+                  <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: '0.25rem' }}>Uploaded dataset ({INITIAL_CERTIFICATES.length} records)</div>
                 </div>
 
                 <div style={{ backgroundColor: '#FFFFFF', borderRadius: '12px', padding: '1.5rem', border: '1px solid #E2E8F0' }}>
@@ -644,7 +649,7 @@ export const AdminPage: React.FC = () => {
           )}
 
           {/* ══════════════════════════════════════════════════════════
-              SECTION 3: TYPE A — CERTIFICATE DATASET (441 RECORDS)
+              SECTION 3: TYPE A — CERTIFICATE DATASET
              ══════════════════════════════════════════════════════════ */}
           {tab === 'dataset' && (
             <div>
@@ -659,7 +664,7 @@ export const AdminPage: React.FC = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
                   <div>
                     <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0F172A', margin: 0 }}>
-                      Type A: Certificate Dataset (441 Records)
+                      Type A: Certificate Dataset ({certs.length} Records)
                     </h2>
                     <p style={{ fontSize: '0.85rem', color: '#64748B', margin: '4px 0 0' }}>
                       Master repository of certificate records. One student may possess multiple certificates.
@@ -682,7 +687,7 @@ export const AdminPage: React.FC = () => {
                       style={{ padding: '8px 16px', fontSize: '0.85rem' }}
                     >
                       <CloudUpload size={15} />
-                      {syncing ? 'Syncing…' : 'Sync 441 to Firestore'}
+                      {syncing ? 'Syncing…' : `Sync ${INITIAL_CERTIFICATES.length} to Firestore`}
                     </button>
                   </div>
                 </div>
@@ -1010,7 +1015,7 @@ export const AdminPage: React.FC = () => {
                     className="btn-primary"
                     style={{ padding: '8px 16px', fontSize: '0.85rem', whiteSpace: 'nowrap' }}
                   >
-                    <Shield size={15} /> Create Admin Account
+                    <Users size={15} /> Add User
                   </button>
                 </div>
               </div>
@@ -1509,9 +1514,9 @@ export const AdminPage: React.FC = () => {
               borderBottom: '3px solid #C41230'
             }}>
               <div>
-                <div style={{ fontWeight: 800, fontSize: '1.05rem' }}>Create Admin Account</div>
+                <div style={{ fontWeight: 800, fontSize: '1.05rem' }}>Add User Account</div>
                 <div style={{ fontSize: '0.75rem', color: '#94A3B8', marginTop: '2px' }}>
-                  New account will have Administrator role immediately
+                  Create any portal account — Student or Administrator
                 </div>
               </div>
               <button
@@ -1538,6 +1543,20 @@ export const AdminPage: React.FC = () => {
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                  ROLE
+                </label>
+                <select
+                  value={newAdminRole}
+                  onChange={(e) => setNewAdminRole(e.target.value as UserRole)}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.9rem', outline: 'none', backgroundColor: '#FFFFFF' }}
+                >
+                  <option value="student">Student — can view and claim their certificates</option>
+                  <option value="admin">Administrator — full access to this dashboard</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
                   FULL NAME
                 </label>
                 <input
@@ -1545,7 +1564,7 @@ export const AdminPage: React.FC = () => {
                   required
                   value={newAdminName}
                   onChange={(e) => setNewAdminName(e.target.value)}
-                  placeholder="Enter admin full name"
+                  placeholder="Enter full name"
                   style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.9rem', outline: 'none' }}
                 />
               </div>
@@ -1607,7 +1626,7 @@ export const AdminPage: React.FC = () => {
                   className="btn-primary"
                   style={{ padding: '9px 22px', fontSize: '0.88rem' }}
                 >
-                  {creatingAdmin ? 'Creating…' : 'Create Admin Account'}
+                  {creatingAdmin ? 'Creating…' : newAdminRole === 'admin' ? 'Create Admin Account' : 'Create Student Account'}
                 </button>
               </div>
             </form>

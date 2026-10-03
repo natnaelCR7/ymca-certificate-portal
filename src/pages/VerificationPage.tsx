@@ -4,7 +4,6 @@ import {
   ShieldCheck,
   Search,
   Download,
-  ExternalLink,
   CheckCircle2,
   Calendar,
   Award,
@@ -14,7 +13,7 @@ import {
 } from 'lucide-react';
 import { CertificateRecord } from '../data/certifiedParticipants';
 import { getCertificateById } from '../firebase/service';
-import { downloadCertificatePdf, viewCertificatePdf } from '../utils/pdfGenerator';
+import { downloadCertificatePdf } from '../utils/pdfGenerator';
 
 export const VerificationPage: React.FC = () => {
   const { id: paramId } = useParams<{ id?: string }>();
@@ -276,13 +275,6 @@ export const VerificationPage: React.FC = () => {
                       <Download size={16} /> Download Certificate (Requires Passcode)
                     </button>
 
-                    <button
-                      onClick={() => viewCertificatePdf(cert)}
-                      className="btn-secondary"
-                      style={{ padding: '10px 18px', fontSize: '0.9rem' }}
-                    >
-                      <ExternalLink size={16} /> Preview Document
-                    </button>
                   </div>
                 </div>
               </div>

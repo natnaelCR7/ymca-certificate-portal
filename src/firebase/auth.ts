@@ -162,8 +162,15 @@ export async function signInUser(
       const cred = await signInWithEmailAndPassword(auth, cleanEmail, pass);
       profile.uid = cred.user.uid;
       const firestoreProfile = await getUserProfile(cred.user.uid);
-      if (firestoreProfile) {
+      if (firestoreProfile && firestoreProfile.uid === cred.user.uid) {
         profile = firestoreProfile;
+      } else {
+        // Make sure the real profile (including role: 'admin') exists in
+        // Firestore so role-based security rules can evaluate it.
+        profile = { ...profile, uid: cred.user.uid };
+        try {
+          await setDoc(doc(db, USERS_COLLECTION, cred.user.uid), profile, { merge: true });
+        } catch (e) {}
       }
     } catch (e) {}
     return { success: true, user: profile };
@@ -173,7 +180,7 @@ export async function signInUser(
     const cred = await signInWithEmailAndPassword(auth, cleanEmail, pass);
     let profile = await getUserProfile(cred.user.uid);
 
-    if (!profile) {
+    if (!profile || profile.uid !== cred.user.uid) {
       profile = {
         uid: cred.user.uid,
         email: cleanEmail,
@@ -185,12 +192,13 @@ export async function signInUser(
         createdAt: new Date().toISOString(),
         lastLoginAt: new Date().toISOString()
       };
-      await setDoc(doc(db, USERS_COLLECTION, cred.user.uid), profile);
+      await setDoc(doc(db, USERS_COLLECTION, cred.user.uid), profile, { merge: true });
     } else {
       try {
-        await updateDoc(doc(db, USERS_COLLECTION, cred.user.uid), {
-          lastLoginAt: new Date().toISOString()
-        });
+        profile.lastLoginAt = new Date().toISOString();
+        await setDoc(doc(db, USERS_COLLECTION, cred.user.uid), {
+          lastLoginAt: profile.lastLoginAt
+        }, { merge: true });
       } catch (e) {}
     }
 
@@ -349,14 +357,15 @@ export async function removeAssociatedCertificate(uid: string, certId: string): 
 }
 
 /**
- * Creates an admin account directly using a secondary Firebase app instance.
+ * Creates a new portal account (admin OR student) directly using a secondary Firebase app instance.
  * This guarantees the currently signed-in administrator is NOT signed out or disrupted.
  */
 export async function createAdminAccount(
   email: string,
   pass: string,
   displayName: string,
-  telegramUsername: string = '@admin'
+  telegramUsername: string = '@admin',
+  role: UserRole = 'admin'
 ): Promise<{ success: boolean; user?: AppUserProfile; error?: string }> {
   const cleanEmail = email.trim().toLowerCase();
   const cleanName = displayName.trim();
@@ -396,7 +405,7 @@ export async function createAdminAccount(
     email: cleanEmail,
     displayName: cleanName,
     telegramUsername: cleanTelegram,
-    role: 'admin',
+    role,
     status: 'ACTIVE',
     associatedCertificateIds: [],
     createdAt: new Date().toISOString(),
@@ -406,13 +415,13 @@ export async function createAdminAccount(
   try {
     await setDoc(doc(db, USERS_COLLECTION, newUid), newAdminProfile);
   } catch (e) {
-    console.warn('Failed to save new admin in Firestore:', e);
+    console.warn('Failed to save new user in Firestore:', e);
   }
 
   const local = getLocalUsers();
   const existingIdx = local.findIndex(u => u.email.toLowerCase() === cleanEmail);
   if (existingIdx !== -1) {
-    local[existingIdx] = { ...local[existingIdx], ...newAdminProfile, role: 'admin' };
+    local[existingIdx] = { ...local[existingIdx], ...newAdminProfile };
   } else {
     local.unshift(newAdminProfile);
   }

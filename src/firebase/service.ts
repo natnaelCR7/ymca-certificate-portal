@@ -12,7 +12,8 @@ import { db } from './config';
 import { CertificateRecord, INITIAL_CERTIFICATES, AVAILABLE_COURSES } from '../data/certifiedParticipants';
 
 const COLLECTION_NAME = 'certificates';
-const LOCAL_STORAGE_KEY = 'ymca_certificates_cache_v4';
+// v6: bumped when the FULL student_attendance_verification.xlsx dataset (all 335 rows) replaced the old 441-record set
+const LOCAL_STORAGE_KEY = 'ymca_certificates_cache_v6';
 const PORTAL_SETTINGS_KEY = 'ymca_portal_settings_v1';
 const PROGRAM_SETTINGS_KEY = 'ymca_program_settings_v1';
 
@@ -90,7 +91,7 @@ export async function setProgramAvailability(program: string, available: boolean
 }
 
 // ─────────────────────────────────────────────
-// Certificate Dataset (441 Records)
+// Certificate Dataset (uploaded attendance verification, Approved rows)
 // ─────────────────────────────────────────────
 
 function getLocalDataset(): CertificateRecord[] {
@@ -362,16 +363,20 @@ export async function recordDownloadCountOnly(id: string): Promise<void> {
 }
 
 /**
- * Batch Sync 441 dataset to Firestore
+ * Batch Sync the current dataset to Firestore, REPLACING the remote collection:
+ * 1. writes every record from the uploaded dataset
+ * 2. deletes any remote doc that is not part of the new dataset (stale records)
  */
 export async function syncBatchToFirestore(
   onProgress?: (current: number, total: number) => void
-): Promise<{ success: number; failed: number }> {
+): Promise<{ success: number; failed: number; deleted: number }> {
   const total = INITIAL_CERTIFICATES.length;
   let successCount = 0;
   let failedCount = 0;
+  let deletedCount = 0;
   const batchSize = 50;
 
+  // 1. Write the new dataset
   for (let i = 0; i < total; i += batchSize) {
     const chunk = INITIAL_CERTIFICATES.slice(i, i + batchSize);
     try {
@@ -391,5 +396,32 @@ export async function syncBatchToFirestore(
     }
   }
 
-  return { success: successCount, failed: failedCount };
+  // 2. Delete stale remote docs not present in the new dataset
+  const newIds = new Set(INITIAL_CERTIFICATES.map(c => c.id.toLowerCase()));
+  try {
+    const snapshot = await getDocs(collection(db, COLLECTION_NAME));
+    const staleIds: string[] = [];
+    snapshot.forEach((d) => {
+      if (!newIds.has(d.id.toLowerCase())) {
+        staleIds.push(d.id);
+      }
+    });
+    for (let i = 0; i < staleIds.length; i += batchSize) {
+      const chunk = staleIds.slice(i, i + batchSize);
+      try {
+        const batch = writeBatch(db);
+        for (const id of chunk) {
+          batch.delete(doc(db, COLLECTION_NAME, id));
+        }
+        await batch.commit();
+        deletedCount += chunk.length;
+      } catch (e) {
+        console.error(`Stale delete batch failed at index ${i}:`, e);
+      }
+    }
+  } catch (e) {
+    console.warn('Could not scan remote collection for stale docs:', e);
+  }
+
+  return { success: successCount, failed: failedCount, deleted: deletedCount };
 }

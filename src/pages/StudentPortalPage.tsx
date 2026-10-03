@@ -16,8 +16,7 @@ import {
   Clock,
   KeyRound,
   FileCheck2,
-  XCircle,
-  Edit3
+  XCircle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { CertificateRecord } from '../data/certifiedParticipants';
@@ -32,8 +31,7 @@ export const StudentPortalPage: React.FC = () => {
     programAvailability,
     signIn,
     signUp,
-    logOut,
-    updateUserName
+    logOut
   } = useAuth();
   const navigate = useNavigate();
 
@@ -64,66 +62,28 @@ export const StudentPortalPage: React.FC = () => {
   // Download state tracking (per cert)
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
-  // Edit Name state
-  const [editNameOpen, setEditNameOpen] = useState(false);
-  const [newNameInput, setNewNameInput] = useState('');
-  const [updatingName, setUpdatingName] = useState(false);
-  const [updateNameError, setUpdateNameError] = useState('');
-  const [updateNameSuccess, setUpdateNameSuccess] = useState('');
-
-  // Helper to load all certificates for authenticated student
-  const loadStudentCertificates = async (customName?: string) => {
-    if (!currentUser) {
-      setStudentCerts([]);
-      return;
-    }
-    setCertsLoading(true);
-    try {
-      const nameToSearch = customName || currentUser.displayName;
-      const certs = await getCertificatesForStudent(
-        nameToSearch,
-        currentUser.associatedCertificateIds
-      );
-      setStudentCerts(certs);
-    } catch (e) {
-      console.error('Error loading student certificates:', e);
-    } finally {
-      setCertsLoading(false);
-    }
-  };
-
+  // Load all certificates for authenticated student
   useEffect(() => {
-    loadStudentCertificates();
-  }, [currentUser]);
-
-  const handleSaveName = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const clean = newNameInput.trim();
-    if (!clean) {
-      setUpdateNameError('Please enter a valid full name.');
-      return;
-    }
-    setUpdatingName(true);
-    setUpdateNameError('');
-    setUpdateNameSuccess('');
-    try {
-      const res = await updateUserName(clean);
-      if (!res.success) {
-        setUpdateNameError(res.error || 'Failed to update name.');
+    async function loadStudentCertificates() {
+      if (!currentUser) {
+        setStudentCerts([]);
         return;
       }
-      setUpdateNameSuccess('Name updated successfully!');
-      await loadStudentCertificates(clean);
-      setTimeout(() => {
-        setEditNameOpen(false);
-        setUpdateNameSuccess('');
-      }, 900);
-    } catch (err) {
-      setUpdateNameError('An unexpected error occurred.');
-    } finally {
-      setUpdatingName(false);
+      setCertsLoading(true);
+      try {
+        const certs = await getCertificatesForStudent(
+          currentUser.displayName,
+          currentUser.associatedCertificateIds
+        );
+        setStudentCerts(certs);
+      } catch (e) {
+        console.error('Error loading student certificates:', e);
+      } finally {
+        setCertsLoading(false);
+      }
     }
-  };
+    loadStudentCertificates();
+  }, [currentUser]);
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -475,30 +435,20 @@ export const StudentPortalPage: React.FC = () => {
               <h1 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0F172A', margin: 0 }}>
                 {currentUser.displayName}
               </h1>
-              <button
-                onClick={() => {
-                  setNewNameInput(currentUser.displayName || '');
-                  setUpdateNameError('');
-                  setUpdateNameSuccess('');
-                  setEditNameOpen(true);
-                }}
-                title="Update your full name"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  padding: '3px 10px',
-                  fontSize: '0.76rem',
-                  fontWeight: 600,
-                  borderRadius: '6px',
-                  border: '1px solid #CBD5E1',
-                  backgroundColor: '#FFFFFF',
-                  color: '#334155',
-                  cursor: 'pointer'
-                }}
-              >
-                <Edit3 size={13} color="#C41230" /> Edit Name
-              </button>
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '2px 8px',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                borderRadius: '4px',
+                backgroundColor: '#F1F5F9',
+                color: '#475569',
+                border: '1px solid #E2E8F0'
+              }}>
+                <FileCheck2 size={12} color="#059669" /> Official Certified Record
+              </span>
             </div>
             <div style={{ fontSize: '0.82rem', color: '#64748B', display: 'flex', gap: '1rem', marginTop: '4px' }}>
               <span>Email: {currentUser.email}</span>
@@ -743,124 +693,6 @@ export const StudentPortalPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ── MODAL: UPDATE STUDENT NAME ── */}
-      {editNameOpen && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          backgroundColor: 'rgba(15, 23, 42, 0.6)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 100,
-          padding: '1rem'
-        }}>
-          <div style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: '14px',
-            width: '100%',
-            maxWidth: '460px',
-            overflow: 'hidden',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
-            border: '1px solid #E2E8F0'
-          }}>
-            <div style={{
-              backgroundColor: '#0F172A',
-              color: '#FFFFFF',
-              padding: '1.25rem 1.5rem',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              borderBottom: '3px solid #C41230'
-            }}>
-              <div>
-                <div style={{ fontWeight: 800, fontSize: '1.05rem' }}>Update Your Full Name</div>
-                <div style={{ fontSize: '0.75rem', color: '#94A3B8', marginTop: '2px' }}>
-                  Synchronizes with your profile and official certificate records
-                </div>
-              </div>
-              <button
-                onClick={() => setEditNameOpen(false)}
-                style={{ background: 'none', border: 'none', color: '#FFFFFF', fontSize: '1.2rem', cursor: 'pointer' }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveName} style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {updateNameError && (
-                <div style={{
-                  padding: '10px 14px',
-                  backgroundColor: '#FEF2F2',
-                  border: '1px solid #FCA5A5',
-                  color: '#991B1B',
-                  borderRadius: '8px',
-                  fontSize: '0.85rem'
-                }}>
-                  {updateNameError}
-                </div>
-              )}
-
-              {updateNameSuccess && (
-                <div style={{
-                  padding: '10px 14px',
-                  backgroundColor: '#F0FDF4',
-                  border: '1px solid #86EFAC',
-                  color: '#166534',
-                  borderRadius: '8px',
-                  fontSize: '0.85rem'
-                }}>
-                  {updateNameSuccess}
-                </div>
-              )}
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                  FULL NAME (AS DISPLAYED ON CERTIFICATE)
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newNameInput}
-                  onChange={(e) => setNewNameInput(e.target.value)}
-                  placeholder="e.g. Natnael Mulugeta"
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #CBD5E1',
-                    fontSize: '0.92rem',
-                    outline: 'none'
-                  }}
-                  autoFocus
-                />
-                <p style={{ fontSize: '0.78rem', color: '#64748B', marginTop: '6px', lineHeight: 1.4 }}>
-                  Ensure proper capitalization and spelling. This exact name will be rendered on your YMCA Certificate PDF when downloaded.
-                </p>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
-                <button
-                  type="button"
-                  onClick={() => setEditNameOpen(false)}
-                  className="btn-secondary"
-                  style={{ padding: '8px 16px', fontSize: '0.88rem' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={updatingName}
-                  className="btn-primary"
-                  style={{ padding: '8px 20px', fontSize: '0.88rem' }}
-                >
-                  {updatingName ? 'Saving…' : 'Save Name'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
